@@ -61,6 +61,13 @@ export async function POST(_request: NextRequest) {
       struct: false, // No need for structure
       markSeen: false,
     });
+
+    // Safeguard against allMessagesMetadata being null
+    if (!allMessagesMetadata) {
+      console.warn('connection.search for ALL UIDs returned null. Treating as no messages in INBOX.');
+      return NextResponse.json({ emailContent: 'No emails found in INBOX (UID search returned null).' });
+    }
+
     console.log(`Found ${allMessagesMetadata.length} total messages in INBOX.`);
 
     if (allMessagesMetadata.length === 0) {
