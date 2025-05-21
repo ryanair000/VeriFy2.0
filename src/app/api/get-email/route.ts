@@ -47,90 +47,32 @@ export async function POST(_request: NextRequest) {
     await connection.openBox('INBOX');
     console.log('Opened INBOX.');
 
-    // EXTREMELY SIMPLIFIED SEARCH FOR TESTING
-    const simplifiedSearchCriteria = ['TEXT', 'netflix']; // Test with the simplest keyword search
-    console.log('TEST: Searching for UIDs and dates with simplified criteria:', simplifiedSearchCriteria);
+    // EXTREMELY SIMPLIFIED SEARCH FOR TESTING - wrapped in an outer array
+    const simplifiedSearchCriteria = [['TEXT', 'netflix']];
+    console.log('TEST: Searching for UIDs and dates with simplified criteria (v2):', simplifiedSearchCriteria);
     const netflixMessagesMetadata = await connection.search(simplifiedSearchCriteria, {
       bodies: ['HEADER.FIELDS (DATE)'],
       struct: true
     });
 
     if (!netflixMessagesMetadata) {
-      console.warn('TEST: connection.search (simplified) returned null.');
-      return NextResponse.json({ emails: [], message: 'No Netflix emails found (simplified UID search returned null).' });
+      console.warn('TEST: connection.search (simplified v2) returned null.');
+      return NextResponse.json({ emails: [], message: 'No Netflix emails found (simplified v2 UID search returned null).' });
     }
 
-    console.log(`TEST: Found ${netflixMessagesMetadata.length} total "netflix" messages (metadata with simplified search).`);
+    console.log(`TEST: Found ${netflixMessagesMetadata.length} total "netflix" messages (metadata with simplified search v2).`);
 
     if (netflixMessagesMetadata.length === 0) {
-      return NextResponse.json({ emails: [], message: 'No Netflix emails found with simplified criteria.' });
+      return NextResponse.json({ emails: [], message: 'No Netflix emails found with simplified criteria (v2).' });
     }
 
-    // Step 2: Sort these messages by date
-    netflixMessagesMetadata.sort((a, b) => {
-      const dateA = new Date(a.attributes.date || 0).getTime();
-      const dateB = new Date(b.attributes.date || 0).getTime();
-      return dateB - dateA; // Newest first
-    });
-
-    // Step 3: Take the latest 5 (or fewer)
-    const latest5Metadata = netflixMessagesMetadata.slice(0, 5);
-    console.log(`Identified latest ${latest5Metadata.length} "netflix" messages by UID for full fetch.`);
-
-    const emailContents: string[] = [];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fullFetchOptions: any = { bodies: [''], struct: true, markSeen: false };
-
-    // Step 4 & 5: Fetch full content for these 5 and parse
-    for (const meta of latest5Metadata) {
-      const messageUid = meta.attributes.uid;
-      console.log(`Fetching full content for UID: ${messageUid}`);
-      try {
-        const messages = await connection.search([messageUid.toString()], fullFetchOptions);
-        
-        if (!messages || messages.length === 0) {
-          console.error(`Could not fetch message details for UID: ${messageUid}`);
-          emailContents.push(`<p>Error: Could not retrieve details for email UID ${messageUid}.</p>`);
-          continue;
-        }
-
-        const message = messages[0];
-        const fullMessagePart = message.parts.find(part => part.which === '');
-        
-        if (!fullMessagePart || !fullMessagePart.body) {
-          console.error('No full message part found or body is empty for UID:', messageUid);
-          emailContents.push(`<p>Error: Could not retrieve content for email UID ${messageUid}.</p>`);
-          continue;
-        }
-
-        const rawEmail = fullMessagePart.body;
-        const parsedEmail: ParsedMail = await simpleParser(rawEmail);
-        let emailHtml = parsedEmail.html || '';
-
-        if (!emailHtml && parsedEmail.text) {
-          emailHtml = `<pre style="white-space: pre-wrap; word-wrap: break-word;">${parsedEmail.textAsHtml || parsedEmail.text.replace(/\n/g, '<br>')}</pre>`;
-        }
-        
-        if (!emailHtml) {
-          console.log('Email content (HTML or text) is empty after parsing for UID:', messageUid);
-          emailContents.push(`<p>Email UID ${messageUid} found, but content appears to be empty.</p>`);
-        } else {
-          emailContents.push(emailHtml);
-        }
-      } catch (fetchOrParseError: unknown) {
-        const fpError = fetchOrParseError as Error;
-        console.error(`Error fetching/parsing email UID ${messageUid}:`, fpError);
-        emailContents.push(`<p>Error processing email UID ${messageUid}: ${fpError.message}</p>`);
-      }
-    }
-    
-    console.log('Successfully processed emails. Returning contents for:', emailContents.length);
-    return NextResponse.json({ emails: emailContents });
+    console.log('TEST: Simplified search (v2) was successful. Further processing would happen here.');
+    return NextResponse.json({ emails: [], message: `Simplified search (v2) found ${netflixMessagesMetadata.length} items. Processing not fully implemented in this test.` });
 
   } catch (e: unknown) {
     const error = e as Error;
-    console.error('IMAP connection or processing error (during simplified test):', error);
-    let errorMessage = 'Failed to fetch emails (simplified test).';
+    console.error('IMAP connection or processing error (during simplified test v2):', error);
+    let errorMessage = 'Failed to fetch emails (simplified test v2).';
     if (error.message) {
         errorMessage = error.message;
     }
