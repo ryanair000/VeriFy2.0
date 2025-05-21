@@ -99,8 +99,9 @@ export async function POST(_request: NextRequest) {
     ];
 
     // Combine UID list with Netflix criteria.
-    // This searches for messages that are in the UID list AND match the netflix criteria.
-    const combinedSearchCriteria = [uidSearchString, ...netflixCriteria];
+    // The UID string itself is a criterion, and the netflixCriteria (an OR block) is another.
+    // These will be implicitly ANDed by node-imap.
+    const combinedSearchCriteria = [uidSearchString, netflixCriteria];
     
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fetchOptions: any = { // Using any for now
