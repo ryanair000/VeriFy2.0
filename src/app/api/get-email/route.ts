@@ -28,6 +28,7 @@ const imapConfig: imaps.ImapSimpleOptions = {
   // debug: console.log // Uncomment for detailed IMAP logs
 };
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function POST(_request: NextRequest) {
   if (!IMAP_USER_EMAIL || !IMAP_APP_PASSWORD) {
     console.error('IMAP credentials are not set in environment variables.');
@@ -94,7 +95,8 @@ export async function POST(_request: NextRequest) {
     // This searches for messages that are in the UID list AND match the netflix criteria.
     const combinedSearchCriteria = [uidSearchString, ...netflixCriteria];
     
-    const fetchOptions: any = { // Using any for now to bypass FetchOptions type issue
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fetchOptions: any = { // Using any for now
       bodies: [''], // Fetch the full raw email source
       struct: true,
       markSeen: false, // Set to true if you want to mark emails as read after fetching
