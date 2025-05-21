@@ -1,0 +1,10 @@
+[build]
+  command = "next build"
+  publish = ".next"
+
+[functions]
+  directory = ".next/functions/" # For Next.js API routes (serverless functions)
+
+# Optional: If you need to ensure specific Node.js version
+# [build.environment]
+#   NODE_VERSION = "18" # Or your desired Node.js version 
