@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import imaps from 'imap-simple';
-import { simpleParser, ParsedMail } from 'mailparser';
+// import { simpleParser, ParsedMail } from 'mailparser'; // REMOVED: Unused imports
 // import { Readable } from 'stream'; // REMOVED: Readable is unused
 
 // !!IMPORTANT!!
