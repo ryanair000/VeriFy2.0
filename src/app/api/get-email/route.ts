@@ -105,6 +105,13 @@ export async function POST(_request: NextRequest) {
     // Search for messages matching the combined criteria
     console.log('Searching for "netflix" within the latest UIDs using criteria:', combinedSearchCriteria);
     const messages = await connection.search(combinedSearchCriteria, fetchOptions);
+    
+    // Safeguard against messages being null before accessing length
+    if (!messages) {
+      console.warn('connection.search returned null, treating as no messages found.');
+      return NextResponse.json({ emailContent: 'No "netflix" email found within the latest 5 emails (search returned null).' });
+    }
+
     console.log(`Found ${messages.length} "netflix" messages within the latest UIDs.`);
 
     if (messages.length === 0) {
