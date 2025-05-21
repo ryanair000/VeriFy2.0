@@ -54,8 +54,9 @@ export default function HomePage() {
 
       const data = await response.json();
       setRetrievedEmail(data.emailContent);
-    } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred.');
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || 'An unexpected error occurred.');
     } finally {
       setIsLoading(false);
     }

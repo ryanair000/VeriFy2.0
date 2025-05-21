@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import imaps, { type FetchOptions } from 'imap-simple';
+import imaps from 'imap-simple';
 import { simpleParser, ParsedMail } from 'mailparser';
 import { Readable } from 'stream';
 
@@ -28,15 +28,6 @@ const imapConfig: imaps.ImapSimpleOptions = {
   // debug: console.log // Uncomment for detailed IMAP logs
 };
 
-async function streamToBuffer(stream: Readable): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    stream.on('data', (chunk) => chunks.push(chunk));
-    stream.on('error', reject);
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-  });
-}
-
 export async function POST(request: NextRequest) {
   if (!IMAP_USER_EMAIL || !IMAP_APP_PASSWORD) {
     console.error('IMAP credentials are not set in environment variables.');
@@ -49,7 +40,7 @@ export async function POST(request: NextRequest) {
   let connection: imaps.ImapSimple | null = null;
 
   try {
-    const body = await request.json();
+    // const body = await request.json(); // REMOVED - userEmail from body is not used
     // const userEnteredEmail = body.userEmail; // The email entered in the frontend form - currently not used for search logic
 
     // if (!userEnteredEmail) {
@@ -103,7 +94,7 @@ export async function POST(request: NextRequest) {
     // This searches for messages that are in the UID list AND match the netflix criteria.
     const combinedSearchCriteria = [uidSearchString, ...netflixCriteria];
     
-    const fetchOptions: FetchOptions = {
+    const fetchOptions: any = { // Using any for now to bypass FetchOptions type issue
       bodies: [''], // Fetch the full raw email source
       struct: true,
       markSeen: false, // Set to true if you want to mark emails as read after fetching
@@ -185,13 +176,15 @@ export async function POST(request: NextRequest) {
     console.log('Successfully parsed email, HTML length:', emailHtml.length);
     return NextResponse.json({ emailContent: emailHtml });
 
-  } catch (error: any) {
+  } catch (e: unknown) { // Changed error: any to e: unknown
+    const error = e as Error; // Type assertion
     console.error('IMAP connection or processing error:', error);
     let errorMessage = 'Failed to fetch email.';
     if (error.message) {
         errorMessage = error.message;
     }
-    if (error.source === 'authentication') {
+    // Check if error has a 'source' property before accessing it
+    if (typeof e === 'object' && e !== null && 'source' in e && e.source === 'authentication') {
         errorMessage = 'IMAP Authentication failed. Please check your email and app password in .env.local.';
     }
     return NextResponse.json({ error: errorMessage }, { status: 500 });
