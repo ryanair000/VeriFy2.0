@@ -191,7 +191,7 @@ export async function POST(_request: NextRequest) {
     }
     return NextResponse.json({ error: errorMessage }, { status: 500 });
   } finally {
-    if (connection && connection.state !== 'disconnected') {
+    if (connection && connection.imap && connection.imap.state !== 'disconnected') {
       try {
         await connection.end();
         console.log('IMAP connection closed.');
