@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import imaps from 'imap-simple';
+import imaps, { type FetchOptions } from 'imap-simple';
 import { simpleParser, ParsedMail } from 'mailparser';
 import { Readable } from 'stream';
 
@@ -103,7 +103,7 @@ export async function POST(request: NextRequest) {
     // This searches for messages that are in the UID list AND match the netflix criteria.
     const combinedSearchCriteria = [uidSearchString, ...netflixCriteria];
     
-    const fetchOptions: imaps.FetchOptions = {
+    const fetchOptions: FetchOptions = {
       bodies: [''], // Fetch the full raw email source
       struct: true,
       markSeen: false, // Set to true if you want to mark emails as read after fetching
