@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import imaps from 'imap-simple';
 import { simpleParser, ParsedMail } from 'mailparser';
-import { Readable } from 'stream';
+// import { Readable } from 'stream'; // REMOVED: Readable is unused
 
 // !!IMPORTANT!!
 // Create a .env.local file in your project root and add these:
@@ -28,7 +28,7 @@ const imapConfig: imaps.ImapSimpleOptions = {
   // debug: console.log // Uncomment for detailed IMAP logs
 };
 
-export async function POST(request: NextRequest) {
+export async function POST(_request: NextRequest) {
   if (!IMAP_USER_EMAIL || !IMAP_APP_PASSWORD) {
     console.error('IMAP credentials are not set in environment variables.');
     return NextResponse.json(
