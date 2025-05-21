@@ -96,7 +96,7 @@ export default function HomePage() {
           
           <div className="mb-6">
             <label htmlFor="emailInput" className="block text-sm font-medium text-gray-700 mb-1">
-              Email Address (for API call, not for IMAP login)
+              Email Address
             </label>
             <input
               type="email"
