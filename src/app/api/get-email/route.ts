@@ -41,41 +41,29 @@ export async function POST(_request: NextRequest) {
   let connection: imaps.ImapSimple | null = null;
 
   try {
-    // const body = await request.json(); // REMOVED - userEmail from body is not used
-    // const userEnteredEmail = body.userEmail; // The email entered in the frontend form - currently not used for search logic
-
-    // if (!userEnteredEmail) {
-    //   return NextResponse.json({ error: 'User email is required from frontend' }, { status: 400 });
-    // }
-
     connection = await imaps.connect(imapConfig);
     console.log('Successfully connected to IMAP server.');
 
     await connection.openBox('INBOX');
     console.log('Opened INBOX.');
 
-    const netflixSearchCriteria = [
-      'OR',
-      ['OR', ['SUBJECT', 'netflix'], ['BODY', 'netflix']],
-      ['TEXT', 'netflix']
-    ];
-
-    // Step 1: Search for UIDs & dates of all emails matching "netflix"
-    console.log('Searching for UIDs and dates of all "netflix" emails:', netflixSearchCriteria);
-    const netflixMessagesMetadata = await connection.search(netflixSearchCriteria, {
-      bodies: ['HEADER.FIELDS (DATE)'], // Only need date for sorting
-      struct: true // Required for attributes.date
+    // EXTREMELY SIMPLIFIED SEARCH FOR TESTING
+    const simplifiedSearchCriteria = ['TEXT', 'netflix']; // Test with the simplest keyword search
+    console.log('TEST: Searching for UIDs and dates with simplified criteria:', simplifiedSearchCriteria);
+    const netflixMessagesMetadata = await connection.search(simplifiedSearchCriteria, {
+      bodies: ['HEADER.FIELDS (DATE)'],
+      struct: true
     });
 
     if (!netflixMessagesMetadata) {
-      console.warn('connection.search for "netflix" UIDs returned null.');
-      return NextResponse.json({ emails: [], message: 'No Netflix emails found (UID search returned null).' });
+      console.warn('TEST: connection.search (simplified) returned null.');
+      return NextResponse.json({ emails: [], message: 'No Netflix emails found (simplified UID search returned null).' });
     }
 
-    console.log(`Found ${netflixMessagesMetadata.length} total "netflix" messages (metadata).`);
+    console.log(`TEST: Found ${netflixMessagesMetadata.length} total "netflix" messages (metadata with simplified search).`);
 
     if (netflixMessagesMetadata.length === 0) {
-      return NextResponse.json({ emails: [], message: 'No Netflix emails found matching criteria.' });
+      return NextResponse.json({ emails: [], message: 'No Netflix emails found with simplified criteria.' });
     }
 
     // Step 2: Sort these messages by date
@@ -141,8 +129,8 @@ export async function POST(_request: NextRequest) {
 
   } catch (e: unknown) {
     const error = e as Error;
-    console.error('IMAP connection or processing error:', error);
-    let errorMessage = 'Failed to fetch emails.';
+    console.error('IMAP connection or processing error (during simplified test):', error);
+    let errorMessage = 'Failed to fetch emails (simplified test).';
     if (error.message) {
         errorMessage = error.message;
     }
