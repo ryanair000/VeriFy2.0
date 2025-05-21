@@ -54,61 +54,68 @@ export async function POST(_request: NextRequest) {
     await connection.openBox('INBOX');
     console.log('Opened INBOX.');
 
-    // Search criteria for "netflix"
     const netflixSearchCriteria = [
       'OR',
       ['OR', ['SUBJECT', 'netflix'], ['BODY', 'netflix']],
       ['TEXT', 'netflix']
     ];
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fetchOptions: any = {
-      bodies: [''], // Fetch the full raw email source
-      struct: true,
-      markSeen: false,
-    };
+    // Step 1: Search for UIDs & dates of all emails matching "netflix"
+    console.log('Searching for UIDs and dates of all "netflix" emails:', netflixSearchCriteria);
+    const netflixMessagesMetadata = await connection.search(netflixSearchCriteria, {
+      bodies: ['HEADER.FIELDS (DATE)'], // Only need date for sorting
+      struct: true // Required for attributes.date
+    });
 
-    console.log('Searching for all "netflix" emails in INBOX with criteria:', netflixSearchCriteria);
-    const allNetflixMessages = await connection.search(netflixSearchCriteria, fetchOptions);
-
-    if (!allNetflixMessages) {
-      console.warn('connection.search for "netflix" emails returned null.');
-      return NextResponse.json({ emails: [], message: 'No Netflix emails found (search returned null).' });
+    if (!netflixMessagesMetadata) {
+      console.warn('connection.search for "netflix" UIDs returned null.');
+      return NextResponse.json({ emails: [], message: 'No Netflix emails found (UID search returned null).' });
     }
 
-    console.log(`Found ${allNetflixMessages.length} total "netflix" messages.`);
+    console.log(`Found ${netflixMessagesMetadata.length} total "netflix" messages (metadata).`);
 
-    if (allNetflixMessages.length === 0) {
+    if (netflixMessagesMetadata.length === 0) {
       return NextResponse.json({ emails: [], message: 'No Netflix emails found matching criteria.' });
     }
 
-    // Sort all found Netflix messages by date, newest first
-    allNetflixMessages.sort((a, b) => {
-        const dateA = new Date(a.attributes.date || 0).getTime();
-        const dateB = new Date(b.attributes.date || 0).getTime();
-        return dateB - dateA;
+    // Step 2: Sort these messages by date
+    netflixMessagesMetadata.sort((a, b) => {
+      const dateA = new Date(a.attributes.date || 0).getTime();
+      const dateB = new Date(b.attributes.date || 0).getTime();
+      return dateB - dateA; // Newest first
     });
 
-    // Take the latest 5 (or fewer if not enough)
-    const latest5NetflixMessages = allNetflixMessages.slice(0, 5);
-    console.log(`Processing the latest ${latest5NetflixMessages.length} "netflix" messages.`);
+    // Step 3: Take the latest 5 (or fewer)
+    const latest5Metadata = netflixMessagesMetadata.slice(0, 5);
+    console.log(`Identified latest ${latest5Metadata.length} "netflix" messages by UID for full fetch.`);
 
     const emailContents: string[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fullFetchOptions: any = { bodies: [''], struct: true, markSeen: false };
 
-    for (const message of latest5NetflixMessages) {
-      const messageUid = message.attributes.uid;
-      console.log('Processing message with UID:', messageUid);
-
-      const fullMessagePart = message.parts.find(part => part.which === '');
-      
-      if (!fullMessagePart || !fullMessagePart.body) {
-        console.error('No full message part found or body is empty for UID:', messageUid);
-        emailContents.push(`<p>Error: Could not retrieve content for email UID ${messageUid}.</p>`);
-        continue; // Skip to next message
-      }
-
-      const rawEmail = fullMessagePart.body;
+    // Step 4 & 5: Fetch full content for these 5 and parse
+    for (const meta of latest5Metadata) {
+      const messageUid = meta.attributes.uid;
+      console.log(`Fetching full content for UID: ${messageUid}`);
       try {
+        const messages = await connection.search([messageUid.toString()], fullFetchOptions);
+        
+        if (!messages || messages.length === 0) {
+          console.error(`Could not fetch message details for UID: ${messageUid}`);
+          emailContents.push(`<p>Error: Could not retrieve details for email UID ${messageUid}.</p>`);
+          continue;
+        }
+
+        const message = messages[0];
+        const fullMessagePart = message.parts.find(part => part.which === '');
+        
+        if (!fullMessagePart || !fullMessagePart.body) {
+          console.error('No full message part found or body is empty for UID:', messageUid);
+          emailContents.push(`<p>Error: Could not retrieve content for email UID ${messageUid}.</p>`);
+          continue;
+        }
+
+        const rawEmail = fullMessagePart.body;
         const parsedEmail: ParsedMail = await simpleParser(rawEmail);
         let emailHtml = parsedEmail.html || '';
 
@@ -122,10 +129,10 @@ export async function POST(_request: NextRequest) {
         } else {
           emailContents.push(emailHtml);
         }
-      } catch (parseError: unknown) {
-        const pError = parseError as Error;
-        console.error(`Error parsing email UID ${messageUid}:`, pError);
-        emailContents.push(`<p>Error parsing email UID ${messageUid}: ${pError.message}</p>`);
+      } catch (fetchOrParseError: unknown) {
+        const fpError = fetchOrParseError as Error;
+        console.error(`Error fetching/parsing email UID ${messageUid}:`, fpError);
+        emailContents.push(`<p>Error processing email UID ${messageUid}: ${fpError.message}</p>`);
       }
     }
     
