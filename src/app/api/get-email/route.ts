@@ -28,6 +28,17 @@ const imapConfig: imaps.ImapSimpleOptions = {
   // debug: console.log // Uncomment for detailed IMAP logs
 };
 
+// Helper function to format date for IMAP SINCE criterion
+function formatDateForIMAP(date: Date): string {
+  const day = date.getDate();
+  const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+  ];
+  const month = monthNames[date.getMonth()];
+  const year = date.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function POST(_request: NextRequest) {
   if (!IMAP_USER_EMAIL || !IMAP_APP_PASSWORD) {
@@ -52,11 +63,13 @@ export async function POST(_request: NextRequest) {
     fifteenMinutesAgo.setMinutes(fifteenMinutesAgo.getMinutes() - 15);
     // IMAP SINCE criterion expects date in "DD-Mon-YYYY" format or a Date object
     // Using a Date object is generally safer with node-imap / imap-simple
+    // UPDATE: Formatting to string as Date object caused issues with SINCE argument count.
+    const formattedDateForSearch = formatDateForIMAP(fifteenMinutesAgo);
 
     // Search criteria: TEXT 'netflix' AND SINCE 15 minutes ago
     const searchCriteria = [
       ['TEXT', 'netflix'],
-      'SINCE', fifteenMinutesAgo
+      'SINCE', formattedDateForSearch
     ];
 
     console.log('Searching for "netflix" emails in the last 15 minutes. Criteria:', searchCriteria);
