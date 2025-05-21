@@ -110,7 +110,7 @@ export async function POST(_request: NextRequest) {
     try {
       console.log(`Fetching full content for UID: ${latestMessageUid}`);
       // Revert to connection.search() as .fetch() is not on ImapSimple type
-      const messages = await connection.search([latestMessageUid.toString()], fullFetchOptions);
+      const messages = await connection.search([['UID', latestMessageUid.toString()]], fullFetchOptions);
       
       if (!messages || messages.length === 0) {
         console.error(`Could not fetch message details for UID: ${latestMessageUid}`);
