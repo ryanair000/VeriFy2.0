@@ -1,103 +1,141 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState } from 'react';
+
+// Simple SVG icon for logout (replace with a proper icon library if available)
+const LogoutIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15M12 9l-3 3m0 0l3 3m-3-3h12.75" />
+  </svg>
+);
+
+// Simple SVG icon for fetch (replace with a proper icon library if available)
+const FetchIcon = () => (
+ <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+  </svg>
+);
+
+// Simple SVG Mail Icon
+const MailIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 mr-2 text-indigo-600">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+  </svg>
+);
+
+export default function HomePage() {
+  const [email, setEmail] = useState('');
+  const [retrievedEmail, setRetrievedEmail] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFetchEmail = async () => {
+    // Using a fixed email for the API call as per original requirement context
+    // The input email is just for show in this version to match the new UI
+    const apiUserEmail = 'user@example.com'; // This can be any string if your API doesn't use it
+    setIsLoading(true);
+    setError(null);
+    setRetrievedEmail(null);
+
+    try {
+      const response = await fetch('/api/get-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        // The body includes the email from the input field, though the backend might use one from .env
+        body: JSON.stringify({ userEmail: email || apiUserEmail }), 
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch email');
+      }
+
+      const data = await response.json();
+      setRetrievedEmail(data.emailContent);
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="min-h-screen bg-gray-100 flex flex-col">
+      {/* Header */}
+      <header className="bg-white shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center">
+              <MailIcon />
+              <div>
+                <h1 className="text-2xl font-bold text-indigo-600">VeriFy</h1>
+                <p className="text-sm text-gray-500">All Your Accounts. VeriFied and Simplified.</p>
+              </div>
+            </div>
+            <button 
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-red-500 hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-400"
+            >
+              <LogoutIcon />
+              Logout
+            </button>
+          </div>
+        </div>
+      </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
+      {/* Main Content */}
+      <main className="flex-grow flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-lg">
+          <h2 className="text-xl font-semibold text-gray-700 mb-6 text-center">
+            Enter your email, hit the button, and view latest email
+          </h2>
+          
+          <div className="mb-6">
+            <label htmlFor="emailInput" className="block text-sm font-medium text-gray-700 mb-1">
+              Email Address
+            </label>
+            <input
+              type="email"
+              id="emailInput" // Changed id to avoid conflict if any other element has 'email' id
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              placeholder="e.g., user@example.com"
             />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+          </div>
+
+          <button
+            onClick={handleFetchEmail}
+            disabled={isLoading}
+            className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-not-allowed"
           >
-            Read our docs
-          </a>
+            <FetchIcon />
+            {isLoading ? 'Fetching...' : 'Fetch Emails'}
+          </button>
+
+          {error && (
+            <div className="mt-6 p-3 text-sm text-red-700 bg-red-100 rounded-lg border border-red-300" role="alert">
+              <span className="font-medium">Error:</span> {error}
+            </div>
+          )}
+
+          {retrievedEmail && (
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold mb-2 text-gray-800">Retrieved Email:</h3>
+              <div 
+                className="bg-gray-50 p-4 rounded-lg shadow-inner prose prose-sm max-w-none overflow-x-auto border border-gray-200"
+                dangerouslySetInnerHTML={{ __html: retrievedEmail }}
+              />
+            </div>
+          )}
+           {!retrievedEmail && !isLoading && !error && (
+            <div className="mt-8 p-6 text-center text-gray-400">
+              Your latest email will appear here.
+            </div>
+          )}
         </div>
       </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
     </div>
   );
 }
