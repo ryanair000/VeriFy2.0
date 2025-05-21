@@ -69,7 +69,7 @@ export async function POST(_request: NextRequest) {
     // Search criteria: TEXT 'netflix' AND SINCE 15 minutes ago
     const searchCriteria = [
       ['TEXT', 'netflix'],
-      'SINCE', formattedDateForSearch
+      ['SINCE', formattedDateForSearch] // Group SINCE and its value
     ];
 
     console.log('Searching for "netflix" emails in the last 15 minutes. Criteria:', searchCriteria);
