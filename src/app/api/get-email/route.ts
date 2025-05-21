@@ -47,83 +47,89 @@ export async function POST(_request: NextRequest) {
     await connection.openBox('INBOX');
     console.log('Opened INBOX.');
 
-    // Use the simplified, working search criterion
-    const searchCriteria = [['TEXT', 'netflix']];
+    // Calculate the date for 15 minutes ago
+    const fifteenMinutesAgo = new Date();
+    fifteenMinutesAgo.setMinutes(fifteenMinutesAgo.getMinutes() - 15);
+    // IMAP SINCE criterion expects date in "DD-Mon-YYYY" format or a Date object
+    // Using a Date object is generally safer with node-imap / imap-simple
 
-    console.log('Searching for UIDs and dates of all "netflix" (TEXT search):', searchCriteria);
-    const netflixMessagesMetadata = await connection.search(searchCriteria, {
+    // Search criteria: TEXT 'netflix' AND SINCE 15 minutes ago
+    const searchCriteria = [
+      ['TEXT', 'netflix'],
+      'SINCE', fifteenMinutesAgo
+    ];
+
+    console.log('Searching for "netflix" emails in the last 15 minutes. Criteria:', searchCriteria);
+
+    // Fetch headers first to get UIDs and exact dates for sorting
+    const messagesMetadata = await connection.search(searchCriteria, {
       bodies: ['HEADER.FIELDS (DATE)'],
       struct: true
     });
 
-    if (!netflixMessagesMetadata) {
-      console.warn('connection.search for "netflix" UIDs (TEXT search) returned null.');
-      return NextResponse.json({ emails: [], message: 'No Netflix emails found (UID search returned null).' });
+    if (!messagesMetadata) {
+      console.warn('connection.search for recent "netflix" UIDs returned null.');
+      return NextResponse.json({ emailContent: null, message: 'No Netflix emails found in the last 15 mins (search returned null).' });
     }
 
-    console.log(`Found ${netflixMessagesMetadata.length} total "netflix" messages (metadata from TEXT search).`);
+    console.log(`Found ${messagesMetadata.length} "netflix" messages in the last 15 mins (metadata).`);
 
-    if (netflixMessagesMetadata.length === 0) {
-      return NextResponse.json({ emails: [], message: 'No Netflix emails found matching TEXT search.' });
+    if (messagesMetadata.length === 0) {
+      return NextResponse.json({ emailContent: null, message: 'No Netflix emails found in the last 15 minutes.' });
     }
 
-    netflixMessagesMetadata.sort((a, b) => {
+    // Sort to find the most recent one (though SINCE should ideally limit this)
+    messagesMetadata.sort((a, b) => {
       const dateA = new Date(a.attributes.date || 0).getTime();
       const dateB = new Date(b.attributes.date || 0).getTime();
       return dateB - dateA; // Newest first
     });
 
-    const latest5Metadata = netflixMessagesMetadata.slice(0, 5);
-    console.log(`Identified latest ${latest5Metadata.length} "netflix" messages by UID for full fetch.`);
+    const latestMessageMeta = messagesMetadata[0];
+    const latestMessageUid = latestMessageMeta.attributes.uid;
+    console.log(`Latest "netflix" email in last 15 mins is UID: ${latestMessageUid}`);
 
-    const emailContents: string[] = [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fullFetchOptions: any = { bodies: [''], struct: true, markSeen: false };
+    let emailHtml: string | null = null;
+    let finalMessage = 'Email content should appear here.'; // Default message if parsing fails
 
-    for (const meta of latest5Metadata) {
-      const messageUid = meta.attributes.uid;
-      console.log(`Fetching full content for UID: ${messageUid}`);
-      try {
-        const messages = await connection.search([messageUid.toString()], fullFetchOptions);
-        
-        if (!messages || messages.length === 0) {
-          console.error(`Could not fetch message details for UID: ${messageUid}`);
-          emailContents.push(`<p>Error: Could not retrieve details for email UID ${messageUid}.</p>`);
-          continue;
-        }
-
+    try {
+      console.log(`Fetching full content for UID: ${latestMessageUid}`);
+      const messages = await connection.search([latestMessageUid.toString()], fullFetchOptions);
+      
+      if (!messages || messages.length === 0) {
+        console.error(`Could not fetch message details for UID: ${latestMessageUid}`);
+        finalMessage = `Error: Could not retrieve details for email UID ${latestMessageUid}.`;
+      } else {
         const message = messages[0];
         const fullMessagePart = message.parts.find(part => part.which === '');
         
         if (!fullMessagePart || !fullMessagePart.body) {
-          console.error('No full message part found or body is empty for UID:', messageUid);
-          emailContents.push(`<p>Error: Could not retrieve content for email UID ${messageUid}.</p>`);
-          continue;
-        }
-
-        const rawEmail = fullMessagePart.body;
-        const parsedEmail: ParsedMail = await simpleParser(rawEmail);
-        let emailHtml = parsedEmail.html || '';
-
-        if (!emailHtml && parsedEmail.text) {
-          emailHtml = `<pre style="white-space: pre-wrap; word-wrap: break-word;">${parsedEmail.textAsHtml || parsedEmail.text.replace(/\\n/g, '<br>')}</pre>`;
-        }
-        
-        if (!emailHtml) {
-          console.log('Email content (HTML or text) is empty after parsing for UID:', messageUid);
-          emailContents.push(`<p>Email UID ${messageUid} found, but content appears to be empty.</p>`);
+          console.error('No full message part found or body is empty for UID:', latestMessageUid);
+          finalMessage = `Error: Could not retrieve content for email UID ${latestMessageUid}.`;
         } else {
-          emailContents.push(emailHtml);
+          const rawEmail = fullMessagePart.body;
+          const parsedEmail: ParsedMail = await simpleParser(rawEmail);
+          const parsedHtml = parsedEmail.html || '';
+
+          if (!parsedHtml && parsedEmail.text) {
+            emailHtml = `<pre style="white-space: pre-wrap; word-wrap: break-word;">${parsedEmail.textAsHtml || parsedEmail.text.replace(/\\n/g, '<br>')}</pre>`;
+          } else if (parsedHtml) {
+            emailHtml = parsedHtml;
+          } else {
+            console.log('Email content (HTML or text) is empty after parsing for UID:', latestMessageUid);
+            finalMessage = `Email UID ${latestMessageUid} found, but content appears to be empty.`;
+          }
         }
-      } catch (fetchOrParseError: unknown) {
-        const fpError = fetchOrParseError as Error;
-        console.error(`Error fetching/parsing email UID ${messageUid}:`, fpError);
-        emailContents.push(`<p>Error processing email UID ${messageUid}: ${fpError.message}</p>`);
       }
+    } catch (fetchOrParseError: unknown) {
+      const fpError = fetchOrParseError as Error;
+      console.error(`Error fetching/parsing email UID ${latestMessageUid}:`, fpError);
+      finalMessage = `Error processing email UID ${latestMessageUid}: ${fpError.message}`;
     }
     
-    console.log('Successfully processed emails. Returning contents for:', emailContents.length);
-    return NextResponse.json({ emails: emailContents });
+    return NextResponse.json({ emailContent: emailHtml, message: emailHtml ? null : finalMessage });
 
   } catch (e: unknown) {
     const error = e as Error;
@@ -135,7 +141,7 @@ export async function POST(_request: NextRequest) {
     if (typeof e === 'object' && e !== null && 'source' in e && e.source === 'authentication') {
         errorMessage = 'IMAP Authentication failed. Please check your email and app password in .env.local.';
     }
-    return NextResponse.json({ error: errorMessage, emails: [] }, { status: 500 });
+    return NextResponse.json({ error: errorMessage, emailContent: null }, { status: 500 });
   } finally {
     if (connection && connection.imap && connection.imap.state !== 'disconnected') {
       try {
