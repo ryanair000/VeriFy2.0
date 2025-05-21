@@ -61,6 +61,7 @@ export async function POST(_request: NextRequest) {
       ['TEXT', 'netflix']
     ];
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fetchOptions: any = {
       bodies: [''], // Fetch the full raw email source
       struct: true,
