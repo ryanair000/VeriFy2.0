@@ -25,17 +25,17 @@ const MailIcon = () => (
 
 export default function HomePage() {
   const [email, setEmail] = useState('');
-  const [retrievedEmail, setRetrievedEmail] = useState<string | null>(null);
+  const [retrievedEmails, setRetrievedEmails] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   const handleFetchEmail = async () => {
-    // Using a fixed email for the API call as per original requirement context
-    // The input email is just for show in this version to match the new UI
-    const apiUserEmail = 'user@example.com'; // This can be any string if your API doesn't use it
+    const apiUserEmail = 'user@example.com';
     setIsLoading(true);
     setError(null);
-    setRetrievedEmail(null);
+    setRetrievedEmails([]);
+    setInfoMessage(null);
 
     try {
       const response = await fetch('/api/get-email', {
@@ -43,20 +43,22 @@ export default function HomePage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        // The body includes the email from the input field, though the backend might use one from .env
         body: JSON.stringify({ userEmail: email || apiUserEmail }), 
       });
 
+      const data = await response.json();
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch email');
+        throw new Error(data.error || 'Failed to fetch emails');
       }
 
-      const data = await response.json();
-      setRetrievedEmail(data.emailContent);
+      if (data.message) {
+        setInfoMessage(data.message);
+      }
+      setRetrievedEmails(data.emails || []);
     } catch (err: unknown) {
       const error = err as Error;
       setError(error.message || 'An unexpected error occurred.');
+      setRetrievedEmails([]);
     } finally {
       setIsLoading(false);
     }
@@ -87,9 +89,9 @@ export default function HomePage() {
 
       {/* Main Content */}
       <main className="flex-grow flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-lg">
+        <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl">
           <h2 className="text-xl font-semibold text-gray-700 mb-6 text-center">
-            Enter your email, hit the button, and view latest email
+            Enter your email, hit the button, and view latest emails
           </h2>
           
           <div className="mb-6">
@@ -98,7 +100,7 @@ export default function HomePage() {
             </label>
             <input
               type="email"
-              id="emailInput" // Changed id to avoid conflict if any other element has 'email' id
+              id="emailInput"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
@@ -121,18 +123,27 @@ export default function HomePage() {
             </div>
           )}
 
-          {retrievedEmail && (
-            <div className="mt-8">
-              <h3 className="text-lg font-semibold mb-2 text-gray-800">Retrieved Email:</h3>
-              <div 
-                className="bg-gray-50 p-4 rounded-lg shadow-inner prose prose-sm max-w-none overflow-x-auto border border-gray-200"
-                dangerouslySetInnerHTML={{ __html: retrievedEmail }}
-              />
+          {infoMessage && !error && (
+            <div className="mt-6 p-3 text-sm text-blue-700 bg-blue-100 rounded-lg border border-blue-300" role="status">
+              {infoMessage}
             </div>
           )}
-           {!retrievedEmail && !isLoading && !error && (
+
+          {retrievedEmails.length > 0 && (
+            <div className="mt-8 space-y-6">
+              <h3 className="text-lg font-semibold mb-2 text-gray-800">Retrieved Emails:</h3>
+              {retrievedEmails.map((htmlContent, index) => (
+                <div key={index} className="bg-gray-50 p-4 rounded-lg shadow-inner prose prose-sm max-w-none overflow-x-auto border border-gray-200">
+                  <h4 className="text-md font-semibold mb-2 text-gray-700">Email {index + 1}</h4>
+                  <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {!isLoading && !error && !infoMessage && retrievedEmails.length === 0 && (
             <div className="mt-8 p-6 text-center text-gray-400">
-              Your latest email will appear here.
+              Your latest emails will appear here.
             </div>
           )}
         </div>

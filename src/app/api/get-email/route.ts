@@ -54,108 +54,60 @@ export async function POST(_request: NextRequest) {
     await connection.openBox('INBOX');
     console.log('Opened INBOX.');
 
-    // --- New logic to get latest 5 UIDs ---
-    console.log('Fetching all UIDs from INBOX to determine the latest emails...');
-    const allMessagesMetadata = await connection.search(['ALL'], {
-      bodies: [], // We don't need bodies here, just UIDs
-      struct: false, // No need for structure
-      markSeen: false,
-    });
-
-    // Safeguard against allMessagesMetadata being null
-    if (!allMessagesMetadata) {
-      console.warn('connection.search for ALL UIDs returned null. Treating as no messages in INBOX.');
-      return NextResponse.json({ emailContent: 'No emails found in INBOX (UID search returned null).' });
-    }
-
-    console.log(`Found ${allMessagesMetadata.length} total messages in INBOX.`);
-
-    if (allMessagesMetadata.length === 0) {
-      return NextResponse.json({ emailContent: 'No emails found in INBOX.' });
-    }
-
-    // Extract UIDs and sort them to get the most recent ones
-    // UIDs are generally increasing, so sorting them descending gives newest first.
-    const uids = allMessagesMetadata.map(msg => msg.attributes.uid);
-    uids.sort((a, b) => b - a); // Sort UIDs in descending order
-
-    // Take the latest 5 UIDs (or fewer if not enough messages)
-    const latestUidsToSearch = uids.slice(0, 5);
-    console.log('Will search for "netflix" within these UIDs (latest 5 or fewer):', latestUidsToSearch);
-
-    if (latestUidsToSearch.length === 0) {
-      // This case should ideally be covered if allMessagesMetadata.length was 0, but as a safeguard
-      return NextResponse.json({ emailContent: 'No emails to search within after filtering for latest UIDs.' });
-    }
-    
-    const uidSearchString = latestUidsToSearch.join(',');
-    // --- End of new logic ---
-
-    // Original Netflix search terms criteria structure
-    const netflixCriteria = [
+    // Search criteria for "netflix"
+    const netflixSearchCriteria = [
       'OR',
       ['OR', ['SUBJECT', 'netflix'], ['BODY', 'netflix']],
       ['TEXT', 'netflix']
     ];
 
-    // Combine UID list with Netflix criteria.
-    // The UID string itself is a criterion, and the netflixCriteria (an OR block) is another.
-    // These will be implicitly ANDed by node-imap.
-    const combinedSearchCriteria = [uidSearchString, netflixCriteria];
-    
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const fetchOptions: any = { // Using any for now
+    const fetchOptions: any = {
       bodies: [''], // Fetch the full raw email source
       struct: true,
-      markSeen: false, // Set to true if you want to mark emails as read after fetching
+      markSeen: false,
     };
 
-    // Search for messages matching the combined criteria
-    console.log('Searching for "netflix" within the latest UIDs using criteria:', combinedSearchCriteria);
-    const messages = await connection.search(combinedSearchCriteria, fetchOptions);
-    
-    // Safeguard against messages being null before accessing length
-    if (!messages) {
-      console.warn('connection.search returned null, treating as no messages found.');
-      return NextResponse.json({ emailContent: 'No "netflix" email found within the latest 5 emails (search returned null).' });
+    console.log('Searching for all "netflix" emails in INBOX with criteria:', netflixSearchCriteria);
+    const allNetflixMessages = await connection.search(netflixSearchCriteria, fetchOptions);
+
+    if (!allNetflixMessages) {
+      console.warn('connection.search for "netflix" emails returned null.');
+      return NextResponse.json({ emails: [], message: 'No Netflix emails found (search returned null).' });
     }
 
-    console.log(`Found ${messages.length} "netflix" messages within the latest UIDs.`);
+    console.log(`Found ${allNetflixMessages.length} total "netflix" messages.`);
 
-    if (messages.length === 0) {
-      return NextResponse.json({ emailContent: 'No "netflix" email found within the latest 5 emails.' });
+    if (allNetflixMessages.length === 0) {
+      return NextResponse.json({ emails: [], message: 'No Netflix emails found matching criteria.' });
     }
 
-    // Get the latest email from the filtered list
-    // (Sort by date, as UIDs in 'messages' might not be perfectly date-ordered if multiple matched from the 5)
-    let latestMessage = messages[0];
-    if (messages.length > 1) {
-        messages.sort((a,b) => {
-            const dateA = new Date(a.attributes.date || 0).getTime();
-            const dateB = new Date(b.attributes.date || 0).getTime();
-            return dateB - dateA; // Sort descending, newest first
-        });
-        latestMessage = messages[0];
-    }
-    
-    const latestMessageUid = latestMessage.attributes.uid;
-    console.log('Processing message with UID:', latestMessageUid);
+    // Sort all found Netflix messages by date, newest first
+    allNetflixMessages.sort((a, b) => {
+        const dateA = new Date(a.attributes.date || 0).getTime();
+        const dateB = new Date(b.attributes.date || 0).getTime();
+        return dateB - dateA;
+    });
 
-    // When bodies: [''] is used, the full raw message source is in the part with which: ''
-    const fullMessagePart = latestMessage.parts.find(part => part.which === '');
-    
-    if (!fullMessagePart || !fullMessagePart.body) {
-        console.error('No full message part (which: \'\') found or body is empty for message UID:', latestMessageUid);
-        // Attempt to find 'TEXT' part as a fallback, though it might not be the complete email
-        const textPartFallback = latestMessage.parts.find(part => part.which === 'TEXT');
-        if (!textPartFallback || !textPartFallback.body) {
-            console.error('Fallback to TEXT part also failed or body is empty for message UID:', latestMessageUid);
-            return NextResponse.json({ error: 'Email found, but content is missing or in an unexpected format.' }, { status: 500 });
-        }
-        console.warn('Using TEXT part as fallback for UID:', latestMessageUid);
-        const rawEmail = textPartFallback.body;
-        
-        // Parse the raw email to get HTML content
+    // Take the latest 5 (or fewer if not enough)
+    const latest5NetflixMessages = allNetflixMessages.slice(0, 5);
+    console.log(`Processing the latest ${latest5NetflixMessages.length} "netflix" messages.`);
+
+    const emailContents: string[] = [];
+
+    for (const message of latest5NetflixMessages) {
+      const messageUid = message.attributes.uid;
+      console.log('Processing message with UID:', messageUid);
+
+      const fullMessagePart = message.parts.find(part => part.which === '');
+      
+      if (!fullMessagePart || !fullMessagePart.body) {
+        console.error('No full message part found or body is empty for UID:', messageUid);
+        emailContents.push(`<p>Error: Could not retrieve content for email UID ${messageUid}.</p>`);
+        continue; // Skip to next message
+      }
+
+      const rawEmail = fullMessagePart.body;
+      try {
         const parsedEmail: ParsedMail = await simpleParser(rawEmail);
         let emailHtml = parsedEmail.html || '';
 
@@ -164,47 +116,32 @@ export async function POST(_request: NextRequest) {
         }
         
         if (!emailHtml) {
-            console.log('Email content (HTML or text) is empty after parsing fallback TEXT part for UID:', latestMessageUid);
-            return NextResponse.json({ emailContent: 'Email found, but content appears to be empty (from fallback).'});
+          console.log('Email content (HTML or text) is empty after parsing for UID:', messageUid);
+          emailContents.push(`<p>Email UID ${messageUid} found, but content appears to be empty.</p>`);
+        } else {
+          emailContents.push(emailHtml);
         }
-        
-        console.log('Successfully parsed fallback TEXT email, HTML length:', emailHtml.length);
-        return NextResponse.json({ emailContent: emailHtml });
-    }
-
-    // The body here is the raw email source for the message
-    const rawEmail = fullMessagePart.body;
-
-    // Parse the raw email to get HTML content
-    const parsedEmail: ParsedMail = await simpleParser(rawEmail);
-    
-    let emailHtml = parsedEmail.html || '';
-
-    if (!emailHtml && parsedEmail.text) {
-      // Fallback to text if HTML is not available
-      emailHtml = `<pre style="white-space: pre-wrap; word-wrap: break-word;">${parsedEmail.textAsHtml || parsedEmail.text.replace(/\n/g, '<br>')}</pre>`;
+      } catch (parseError: unknown) {
+        const pError = parseError as Error;
+        console.error(`Error parsing email UID ${messageUid}:`, pError);
+        emailContents.push(`<p>Error parsing email UID ${messageUid}: ${pError.message}</p>`);
+      }
     }
     
-    if (!emailHtml) {
-        console.log('Email content (HTML or text) is empty after parsing for UID:', latestMessageUid);
-        return NextResponse.json({ emailContent: 'Email found, but content appears to be empty.'});
-    }
-    
-    console.log('Successfully parsed email, HTML length:', emailHtml.length);
-    return NextResponse.json({ emailContent: emailHtml });
+    console.log('Successfully processed emails. Returning contents for:', emailContents.length);
+    return NextResponse.json({ emails: emailContents });
 
-  } catch (e: unknown) { // Changed error: any to e: unknown
-    const error = e as Error; // Type assertion
+  } catch (e: unknown) {
+    const error = e as Error;
     console.error('IMAP connection or processing error:', error);
-    let errorMessage = 'Failed to fetch email.';
+    let errorMessage = 'Failed to fetch emails.';
     if (error.message) {
         errorMessage = error.message;
     }
-    // Check if error has a 'source' property before accessing it
     if (typeof e === 'object' && e !== null && 'source' in e && e.source === 'authentication') {
         errorMessage = 'IMAP Authentication failed. Please check your email and app password in .env.local.';
     }
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    return NextResponse.json({ error: errorMessage, emails: [] }, { status: 500 });
   } finally {
     if (connection && connection.imap && connection.imap.state !== 'disconnected') {
       try {
