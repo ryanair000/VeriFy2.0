@@ -54,15 +54,6 @@ const EmailView = ({ email }: { email: Email }) => {
   return (
     <div className="mt-8">
       <div className="p-4 rounded-lg border bg-white shadow-sm">
-        <header className="pb-4 border-b">
-          <h3 className="font-semibold text-lg text-gray-800">{email.subject || 'No Subject'}</h3>
-          <p className="text-sm text-gray-600">
-            <span className="font-medium">From:</span> {email.from || 'No Sender'}
-          </p>
-          <p className="text-sm text-gray-500">
-            <span className="font-medium">Date:</span> {displayDate}
-          </p>
-        </header>
         <iframe 
           ref={iframeRef}
           srcDoc={email.html}
