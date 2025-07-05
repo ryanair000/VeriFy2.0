@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import imaps from 'imap-simple';
 import { simpleParser, ParsedMail } from 'mailparser';
 
+// WARNING: In-memory rate limiting is not suitable for production serverless environments like Netlify.
+// Each serverless function invocation is a separate, stateless instance, so this in-memory store will not be shared.
+// This is for demonstration purposes only. For production, use a persistent solution like Upstash Redis.
+const requestStore = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
+const MAX_REQUESTS_PER_WINDOW = 3;
+
 // The following environment variables are now deprecated in favor of passing credentials from the client.
 // You can remove them from your .env.local file.
 // IMAP_USER=your_gmail_address@gmail.com
@@ -30,6 +37,30 @@ function getAppPassword(email: string): string | null {
 }
 
 export async function POST(request: NextRequest) {
+  const ip = request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+  const now = Date.now();
+  
+  const userTimestamps = requestStore.get(ip) || [];
+  
+  // Filter out requests that are older than our time window
+  const recentTimestamps = userTimestamps.filter(
+    (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS
+  );
+
+  const remainingRequests = Math.max(0, MAX_REQUESTS_PER_WINDOW - recentTimestamps.length);
+  const headers = { 'X-RateLimit-Remaining': remainingRequests.toString() };
+
+  if (recentTimestamps.length >= MAX_REQUESTS_PER_WINDOW) {
+    const timeToWait = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - recentTimestamps[0])) / 1000);
+    return new Response(`You're doing that a bit too fast! Please try again in ${timeToWait} seconds.`, { 
+      status: 429,
+      headers: headers,
+    });
+  }
+
+  // Add the current request's timestamp
+  requestStore.set(ip, [...recentTimestamps, now]);
+
   const body = await request.json();
   const { user, search } = body;
 
@@ -44,8 +75,8 @@ export async function POST(request: NextRequest) {
 
   if (!password) {
     return NextResponse.json(
-      { error: `App password not found for user: ${user}. Please check your .env.local configuration.` },
-      { status: 401 }
+      { error: `This email address has not been configured on the server. Please contact the administrator.` },
+      { status: 401, headers: headers }
     );
   }
 
@@ -88,16 +119,11 @@ export async function POST(request: NextRequest) {
       struct: true
     });
 
-    if (!messagesMetadata) {
-      console.warn(`connection.search for recent "${search}" UIDs returned null for user ${user}.`);
-      return NextResponse.json({ emailContent: null, message: `No "${search}" emails found in the last 15 mins (search returned null).` });
+    if (!messagesMetadata || messagesMetadata.length === 0) {
+      return NextResponse.json({ email: null, message: `No recent emails with the term "${search}" were found. You can try sending a new code and refreshing again.` }, { headers: headers });
     }
 
     console.log(`Found ${messagesMetadata.length} "${search}" messages in the last 15 mins (metadata) for user ${user}.`);
-
-    if (messagesMetadata.length === 0) {
-      return NextResponse.json({ emailContent: null, message: `No "${search}" emails found in the last 15 minutes.` });
-    }
 
     // Sort to find the most recent one
     messagesMetadata.sort((a, b) => {
@@ -145,6 +171,18 @@ export async function POST(request: NextRequest) {
             emailHtml = `<pre style="white-space: pre-wrap; word-wrap: break-word;">${parsedEmail.textAsHtml || parsedEmail.text.replace(/\\n/g, '<br>')}</pre>`;
           } else if (parsedHtml) {
             emailHtml = parsedHtml;
+          }
+
+          if (emailHtml) {
+            return NextResponse.json({
+              email: {
+                from: parsedEmail.from?.text,
+                subject: parsedEmail.subject,
+                date: parsedEmail.date,
+                html: emailHtml,
+              },
+              message: null 
+            }, { headers: headers });
           } else {
             console.log('Email content (HTML or text) is empty after parsing for UID:', latestMessageUid);
             finalMessage = `Email UID ${latestMessageUid} found, but content appears to be empty.`;
@@ -157,7 +195,7 @@ export async function POST(request: NextRequest) {
       finalMessage = `Error processing email UID ${latestMessageUid}: ${fpError.message}`;
     }
     
-    return NextResponse.json({ emailContent: emailHtml, message: emailHtml ? null : finalMessage });
+    return NextResponse.json({ email: null, message: emailHtml ? null : finalMessage }, { headers: headers });
 
   } catch (e: unknown) {
     const error = e as Error;
@@ -167,9 +205,9 @@ export async function POST(request: NextRequest) {
         errorMessage = error.message;
     }
     if (typeof e === 'object' && e !== null && 'source' in e && e.source === 'authentication') {
-        errorMessage = 'IMAP Authentication failed. Please check your email and app password in .env.local.';
+        errorMessage = 'Authentication failed. Please double-check that the App Password for this account is correct and has not been revoked.';
     }
-    return NextResponse.json({ error: errorMessage, emailContent: null }, { status: 500 });
+    return NextResponse.json({ error: errorMessage, email: null }, { status: 500, headers: headers });
   } finally {
     if (connection && connection.imap && connection.imap.state !== 'disconnected') {
       try {
