@@ -134,7 +134,7 @@ export default function HomePage() {
             className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-not-allowed"
           >
             <FetchIcon />
-            {isLoading ? 'Fetching...' : `Fetch Latest "${searchInput}" Email`}
+            {isLoading ? 'Fetching...' : <>Fetch Latest &quot;{searchInput}&quot; Email</>}
           </button>
 
           {error && (
@@ -158,7 +158,7 @@ export default function HomePage() {
           
           {!isLoading && !error && !infoMessage && !retrievedEmail && (
             <div className="mt-8 p-6 text-center text-gray-400">
-              Your latest email for the search term "{searchInput}" will appear here.
+              Your latest email for the search term &quot;{searchInput}&quot; will appear here.
             </div>
           )}
         </div>
