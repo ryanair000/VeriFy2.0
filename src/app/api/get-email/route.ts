@@ -99,6 +99,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ emailContent: null, message: `No "${search}" emails found in the last 15 minutes.` });
     }
 
+    // Sort to find the most recent one
     messagesMetadata.sort((a, b) => {
       const dateA = new Date(a.attributes.date || 0).getTime();
       const dateB = new Date(b.attributes.date || 0).getTime();
@@ -109,7 +110,14 @@ export async function POST(request: NextRequest) {
     const latestMessageUid = latestMessageMeta.attributes.uid;
     console.log(`Latest "${search}" email in last 15 mins is UID: ${latestMessageUid}`);
 
-    const fullFetchOptions: any = { bodies: [''], struct: true, markSeen: false };
+    // Define a specific type for fetch options to avoid `any`
+    interface FetchOptions {
+      bodies: string[];
+      struct: boolean;
+      markSeen: boolean;
+    }
+
+    const fullFetchOptions: FetchOptions = { bodies: [''], struct: true, markSeen: false };
     let emailHtml: string | null = null;
     let finalMessage = 'Email content should appear here.'; // Default message if parsing fails
 
