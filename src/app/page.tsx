@@ -25,13 +25,13 @@ const MailIcon = () => (
 
 export default function HomePage() {
   const [emailInput, setEmailInput] = useState('');
+  const [searchInput, setSearchInput] = useState('netflix');
   const [retrievedEmail, setRetrievedEmail] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoMessage, setInfoMessage] = useState<string | null>(null);
 
   const handleFetchEmail = async () => {
-    const apiUserEmail = 'user@example.com';
     setIsLoading(true);
     setError(null);
     setRetrievedEmail(null);
@@ -43,7 +43,10 @@ export default function HomePage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ userEmail: emailInput || apiUserEmail }), 
+        body: JSON.stringify({ 
+          user: emailInput, 
+          search: searchInput 
+        }), 
       });
 
       const data = await response.json();
@@ -74,7 +77,7 @@ export default function HomePage() {
               <MailIcon />
               <div>
                 <h1 className="text-2xl font-bold text-indigo-600">VeriFy</h1>
-                <p className="text-sm text-gray-500">All Your Accounts. VeriFied and Simplified.</p>
+                <p className="text-sm text-gray-500">Your Email Verification Buddy</p>
               </div>
             </div>
             <button 
@@ -91,30 +94,47 @@ export default function HomePage() {
       <main className="flex-grow flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl">
           <h2 className="text-xl font-semibold text-gray-700 mb-6 text-center">
-            Enter your email, hit the button, and view latest Netflix email from last 15 mins
+            Enter your email credentials to fetch emails
           </h2>
           
-          <div className="mb-6">
-            <label htmlFor="emailInput" className="block text-sm font-medium text-gray-700 mb-1">
-              Email Address
-            </label>
-            <input
-              type="email"
-              id="emailInput"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-              placeholder="e.g., user@example.com"
-            />
+          <div className="space-y-4 mb-6">
+            <div>
+              <label htmlFor="emailInput" className="block text-sm font-medium text-gray-700 mb-1">
+                Email Address
+              </label>
+              <input
+                type="email"
+                id="emailInput"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="user@gmail.com"
+                autoComplete="email"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="searchInput" className="block text-sm font-medium text-gray-700 mb-1">
+                Search Term
+              </label>
+              <input
+                type="text"
+                id="searchInput"
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                placeholder="e.g., 'netflix' or 'FROM &quot;someone@example.com&quot;'"
+              />
+            </div>
           </div>
 
           <button
             onClick={handleFetchEmail}
-            disabled={isLoading}
+            disabled={isLoading || !emailInput || !searchInput}
             className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-not-allowed"
           >
             <FetchIcon />
-            {isLoading ? 'Fetching...' : 'Fetch Latest Netflix Email (Last 15 Min)'}
+            {isLoading ? 'Fetching...' : `Fetch Latest "${searchInput}" Email`}
           </button>
 
           {error && (
@@ -138,7 +158,7 @@ export default function HomePage() {
           
           {!isLoading && !error && !infoMessage && !retrievedEmail && (
             <div className="mt-8 p-6 text-center text-gray-400">
-              Your latest Netflix email from the last 15 minutes will appear here.
+              Your latest email for the search term "{searchInput}" will appear here.
             </div>
           )}
         </div>

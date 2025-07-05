@@ -1,34 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import imaps from 'imap-simple';
-import { simpleParser, ParsedMail } from 'mailparser'; // RE-ADD these imports
-// import { Readable } from 'stream'; // REMOVED: Readable is unused
+import { simpleParser, ParsedMail } from 'mailparser';
 
-// !!IMPORTANT!!
-// Create a .env.local file in your project root and add these:
+// The following environment variables are now deprecated in favor of passing credentials from the client.
+// You can remove them from your .env.local file.
 // IMAP_USER=your_gmail_address@gmail.com
 // IMAP_PASSWORD=your_gmail_app_password
-// GMAIL_ADDRESS_TO_SEARCH=email_account_to_search@gmail.com (can be same as IMAP_USER)
 
-const IMAP_USER_EMAIL = process.env.IMAP_USER;
-const IMAP_APP_PASSWORD = process.env.IMAP_PASSWORD;
-// const GMAIL_TARGET_ACCOUNT = process.env.GMAIL_ADDRESS_TO_SEARCH; // This is the account we are searching IN.
-
-const imapConfig: imaps.ImapSimpleOptions = {
-  imap: {
-    user: IMAP_USER_EMAIL || '',
-    password: IMAP_APP_PASSWORD || '',
-    host: 'imap.gmail.com',
-    port: 993,
-    tls: true,
-    authTimeout: 10000, // Increased timeout
-    tlsOptions: {
-      rejectUnauthorized: false, // Necessary for some environments, consider if this is acceptable for your security posture
-    },
-  },
-  // debug: console.log // Uncomment for detailed IMAP logs
-};
-
-// Helper function to format date for IMAP SINCE criterion
 function formatDateForIMAP(date: Date): string {
   const day = date.getDate();
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
@@ -39,59 +17,88 @@ function formatDateForIMAP(date: Date): string {
   return `${day}-${month}-${year}`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function POST(_request: NextRequest) {
-  if (!IMAP_USER_EMAIL || !IMAP_APP_PASSWORD) {
-    console.error('IMAP credentials are not set in environment variables.');
+// Helper function to find the corresponding app password from environment variables
+function getAppPassword(email: string): string | null {
+  let i = 1;
+  while (process.env[`EMAIL_${i}`]) {
+    if (process.env[`EMAIL_${i}`]?.toLowerCase() === email.toLowerCase()) {
+      return process.env[`APP_PASSWORD_${i}`] || null;
+    }
+    i++;
+  }
+  return null;
+}
+
+export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const { user, search } = body;
+
+  if (!user || !search) {
     return NextResponse.json(
-      { error: 'Server configuration error: IMAP credentials missing.' },
-      { status: 500 }
+      { error: 'Missing user or search term in request.' },
+      { status: 400 }
     );
   }
+
+  const password = getAppPassword(user);
+
+  if (!password) {
+    return NextResponse.json(
+      { error: `App password not found for user: ${user}. Please check your .env.local configuration.` },
+      { status: 401 }
+    );
+  }
+
+  const imapConfig: imaps.ImapSimpleOptions = {
+    imap: {
+      user: user,
+      password: password,
+      host: 'imap.gmail.com',
+      port: 993,
+      tls: true,
+      authTimeout: 10000,
+      tlsOptions: {
+        rejectUnauthorized: false, // WARNING: For development/self-signed certs only. In production, use a valid CA-signed certificate and set this to true.
+      },
+    },
+  };
   
   let connection: imaps.ImapSimple | null = null;
 
   try {
     connection = await imaps.connect(imapConfig);
-    console.log('Successfully connected to IMAP server.');
+    console.log(`Successfully connected to IMAP server for user: ${user}.`);
 
     await connection.openBox('INBOX');
     console.log('Opened INBOX.');
 
-    // Calculate the date for 15 minutes ago
     const fifteenMinutesAgo = new Date();
     fifteenMinutesAgo.setMinutes(fifteenMinutesAgo.getMinutes() - 15);
-    // IMAP SINCE criterion expects date in "DD-Mon-YYYY" format or a Date object
-    // Using a Date object is generally safer with node-imap / imap-simple
-    // UPDATE: Formatting to string as Date object caused issues with SINCE argument count.
     const formattedDateForSearch = formatDateForIMAP(fifteenMinutesAgo);
 
-    // Search criteria: TEXT 'netflix' AND SINCE 15 minutes ago
     const searchCriteria = [
-      ['TEXT', 'netflix'],
-      ['SINCE', formattedDateForSearch] // Group SINCE and its value
+      ['TEXT', search],
+      ['SINCE', formattedDateForSearch]
     ];
 
-    console.log('Searching for "netflix" emails in the last 15 minutes. Criteria:', searchCriteria);
+    console.log(`Searching for "${search}" emails in the last 15 minutes for user ${user}. Criteria:`, searchCriteria);
 
-    // Fetch headers first to get UIDs and exact dates for sorting
     const messagesMetadata = await connection.search(searchCriteria, {
       bodies: ['HEADER.FIELDS (DATE)'],
       struct: true
     });
 
     if (!messagesMetadata) {
-      console.warn('connection.search for recent "netflix" UIDs returned null.');
-      return NextResponse.json({ emailContent: null, message: 'No Netflix emails found in the last 15 mins (search returned null).' });
+      console.warn(`connection.search for recent "${search}" UIDs returned null for user ${user}.`);
+      return NextResponse.json({ emailContent: null, message: `No "${search}" emails found in the last 15 mins (search returned null).` });
     }
 
-    console.log(`Found ${messagesMetadata.length} "netflix" messages in the last 15 mins (metadata).`);
+    console.log(`Found ${messagesMetadata.length} "${search}" messages in the last 15 mins (metadata) for user ${user}.`);
 
     if (messagesMetadata.length === 0) {
-      return NextResponse.json({ emailContent: null, message: 'No Netflix emails found in the last 15 minutes.' });
+      return NextResponse.json({ emailContent: null, message: `No "${search}" emails found in the last 15 minutes.` });
     }
 
-    // Sort to find the most recent one (though SINCE should ideally limit this)
     messagesMetadata.sort((a, b) => {
       const dateA = new Date(a.attributes.date || 0).getTime();
       const dateB = new Date(b.attributes.date || 0).getTime();
@@ -100,9 +107,8 @@ export async function POST(_request: NextRequest) {
 
     const latestMessageMeta = messagesMetadata[0];
     const latestMessageUid = latestMessageMeta.attributes.uid;
-    console.log(`Latest "netflix" email in last 15 mins is UID: ${latestMessageUid}`);
+    console.log(`Latest "${search}" email in last 15 mins is UID: ${latestMessageUid}`);
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fullFetchOptions: any = { bodies: [''], struct: true, markSeen: false };
     let emailHtml: string | null = null;
     let finalMessage = 'Email content should appear here.'; // Default message if parsing fails
