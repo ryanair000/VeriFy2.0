@@ -42,7 +42,6 @@ const EmailSkeleton = () => (
 );
 
 const EmailView = ({ email }: { email: Email }) => {
-  const displayDate = email.date ? new Date(email.date).toLocaleString() : 'No date';
   const iframeRef = React.useRef<HTMLIFrameElement>(null);
 
   const resizeIframe = () => {
