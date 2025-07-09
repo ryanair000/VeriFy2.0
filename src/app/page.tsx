@@ -131,7 +131,10 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div 
+      className="min-h-screen flex flex-col bg-cover bg-center bg-no-repeat" 
+      style={{ backgroundImage: "url('/cyberpunk-illustration-with-neon-colors-futuristic-technology.jpg')" }}
+    >
       <Toaster 
         position="top-center"
         toastOptions={{
