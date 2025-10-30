@@ -30,36 +30,54 @@ const MailIcon = () => (
 
 const EmailSkeleton = () => (
   <div className="mt-8 animate-pulse">
-    <div className="h-4 bg-gray-200 rounded w-1/4 mb-2"></div>
-    <div className="h-6 bg-gray-300 rounded w-3/4 mb-4"></div>
-    <div className="space-y-3 mt-6 border-t pt-4">
-      <div className="h-2 bg-gray-200 rounded w-full"></div>
-      <div className="h-2 bg-gray-200 rounded w-full"></div>
-      <div className="h-2 bg-gray-200 rounded w-5/6"></div>
-      <div className="h-2 bg-gray-200 rounded w-3/4"></div>
+    <div className="p-6 rounded-xl border bg-white shadow-lg text-center">
+      <div className="h-6 bg-gray-200 rounded w-40 mx-auto mb-4"></div>
+      <div className="h-16 bg-gray-300 rounded w-48 mx-auto my-4"></div>
+      <div className="h-4 bg-gray-100 rounded w-32 mx-auto"></div>
     </div>
   </div>
 );
 
 const EmailView = ({ email }: { email: Email }) => {
-  const iframeRef = React.useRef<HTMLIFrameElement>(null);
+  const [iframeSrc, setIframeSrc] = useState('');
 
-  const resizeIframe = () => {
-    if (iframeRef.current) {
-      iframeRef.current.style.height = `${iframeRef.current.contentWindow?.document.body.scrollHeight || 500}px`;
-    }
-  };
+  useEffect(() => {
+    // Create a blob URL from the HTML content
+    const blob = new Blob([email.html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    setIframeSrc(url);
+
+    // Cleanup
+    return () => {
+      URL.revokeObjectURL(url);
+    };
+  }, [email.html]);
 
   return (
     <div className="mt-8">
-      <div className="p-4 rounded-lg border bg-white shadow-sm">
-        <iframe 
-          ref={iframeRef}
-          srcDoc={email.html}
-          onLoad={resizeIframe}
-          className="pt-4 w-full border-0"
-          title={email.subject || 'Email Content'}
-        />
+      <div className="p-6 rounded-xl border bg-white shadow-lg">
+        {/* Email Info Header */}
+        <div className="mb-4">
+          <p className="text-sm text-gray-600">
+            <span className="font-semibold">From:</span> {email.from}
+          </p>
+          <p className="text-sm text-gray-600">
+            <span className="font-semibold">Subject:</span> {email.subject}
+          </p>
+          <p className="text-sm text-gray-600">
+            <span className="font-semibold">Date:</span> {new Date(email.date || '').toLocaleString()}
+          </p>
+        </div>
+
+        {/* Email Content */}
+        <div className="border rounded-lg overflow-hidden">
+          <iframe
+            title="Email Content"
+            srcDoc={email.html}
+            className="w-full h-[500px]"
+            sandbox="allow-same-origin allow-scripts"
+          />
+        </div>
       </div>
     </div>
   );
@@ -67,19 +85,10 @@ const EmailView = ({ email }: { email: Email }) => {
 
 
 export default function HomePage() {
-  const [emailInput, setEmailInput] = useState('');
   const [retrievedEmail, setRetrievedEmail] = useState<Email | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [remainingTurns, setRemainingTurns] = useState<number | null>(null);
-
   useEffect(() => {
     toast.success('Welcome to VeriFy!');
-    // Use a timeout to display the second toast shortly after the first
-    setTimeout(() => {
-      toast('You have 3 refresh attempts.', {
-        icon: 'ℹ️',
-      });
-    }, 1000);
   }, []);
 
   const handleFetchEmail = async () => {
@@ -96,16 +105,9 @@ export default function HomePage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
-          user: emailInput, 
           search: 'code' 
         }), 
       });
-
-      // Update remaining turns after every request
-      const remaining = response.headers.get('X-RateLimit-Remaining');
-      if (remaining) {
-        setRemainingTurns(Number(remaining));
-      }
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -162,36 +164,13 @@ export default function HomePage() {
       <main className="flex-grow flex flex-col items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
         <div className="bg-white p-8 rounded-lg shadow-lg w-full max-w-2xl relative">
           
-          {remainingTurns !== null && (
-            <div className="absolute top-4 right-4 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
-              Turns Left: {remainingTurns}
-            </div>
-          )}
-
           <h2 className="text-xl font-semibold text-gray-700 mb-6 text-center">
-            Enter Mail and Select Refresh Mail
+            Please click here to receive the latest code
           </h2>
           
-          <div className="space-y-4 mb-6">
-            <div>
-              <label htmlFor="emailInput" className="block text-sm font-medium text-gray-700 mb-1">
-                Email Address
-              </label>
-              <input
-                type="email"
-                id="emailInput"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                placeholder="user@gmail.com"
-                autoComplete="email"
-              />
-            </div>
-          </div>
-
           <button
             onClick={handleFetchEmail}
-            disabled={isLoading || !emailInput}
+            disabled={isLoading}
             className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-indigo-400 disabled:cursor-not-allowed"
           >
             <FetchIcon />
@@ -205,8 +184,14 @@ export default function HomePage() {
           )}
           
           {!isLoading && !retrievedEmail && (
-            <div className="mt-8 p-6 text-center text-gray-400">
-              Your latest email with a verification code will appear here.
+            <div className="mt-8 p-8 text-center">
+              <div className="inline-block p-4 rounded-full bg-gray-100 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-gray-400">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 9v.906a2.25 2.25 0 01-1.183 1.981l-6.478 3.488M2.25 9v.906a2.25 2.25 0 001.183 1.981l6.478 3.488m8.839 2.51l-4.66-2.51m0 0l-1.023-.55a2.25 2.25 0 00-2.134 0l-1.022.55m0 0l-4.661 2.51m16.5 1.615a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V8.844a2.25 2.25 0 011.183-1.98l7.5-4.04a2.25 2.25 0 012.134 0l7.5 4.04a2.25 2.25 0 011.183 1.98V19.5z" />
+                </svg>
+              </div>
+              <p className="text-gray-500 font-medium">Your latest verification code will appear here</p>
+              <p className="text-sm text-gray-400 mt-2">Click the refresh button above to check for new codes</p>
             </div>
           )}
         </div>
