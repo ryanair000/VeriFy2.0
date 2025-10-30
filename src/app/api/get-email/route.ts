@@ -14,18 +14,6 @@ function formatDateForIMAP(date: Date): string {
   return `${day}-${month}-${year}`;
 }
 
-// Helper function to find the corresponding app password from environment variables
-function getAppPassword(email: string): string | null {
-  let i = 1;
-  while (process.env[`EMAIL_${i}`]) {
-    if (process.env[`EMAIL_${i}`]?.toLowerCase() === email.toLowerCase()) {
-      return process.env[`APP_PASSWORD_${i}`] || null;
-    }
-    i++;
-  }
-  return null;
-}
-
 export async function POST(request: NextRequest) {
 
   const body = await request.json();
@@ -95,7 +83,7 @@ export async function POST(request: NextRequest) {
     console.log(`Found ${messagesMetadata.length} "${search}" messages in the last 15 mins (metadata) for user ${user}.`);
 
     // Sort to find the most recent one
-    messagesMetadata.sort((a: any, b: any) => {
+    messagesMetadata.sort((a, b) => {
       const dateA = new Date(a.attributes.date || 0).getTime();
       const dateB = new Date(b.attributes.date || 0).getTime();
       return dateB - dateA; // Newest first
@@ -126,7 +114,11 @@ export async function POST(request: NextRequest) {
         finalMessage = `Error: Could not retrieve details for email UID ${latestMessageUid}.`;
       } else {
         const message = messages[0];
-        const fullMessagePart = message.parts.find((part: any) => part.which === '');
+        interface MessagePart {
+          which: string;
+          body?: string;
+        }
+        const fullMessagePart = message.parts.find((part: MessagePart) => part.which === '');
         
         if (!fullMessagePart || !fullMessagePart.body) {
           console.error('No full message part found or body is empty for UID:', latestMessageUid);

@@ -39,20 +39,6 @@ const EmailSkeleton = () => (
 );
 
 const EmailView = ({ email }: { email: Email }) => {
-  const [iframeSrc, setIframeSrc] = useState('');
-
-  useEffect(() => {
-    // Create a blob URL from the HTML content
-    const blob = new Blob([email.html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    setIframeSrc(url);
-
-    // Cleanup
-    return () => {
-      URL.revokeObjectURL(url);
-    };
-  }, [email.html]);
-
   return (
     <div className="mt-8">
       <div className="p-6 rounded-xl border bg-white shadow-lg">
