@@ -15,7 +15,6 @@ function formatDateForIMAP(date: Date): string {
 }
 
 export async function POST(request: NextRequest) {
-
   const body = await request.json();
   const { search } = body;
 
@@ -26,115 +25,88 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Use the first email configuration from environment variables
-  const user = process.env.EMAIL_1;
-  const password = process.env.APP_PASSWORD_1;
+  for (let i = 1; i <= 5; i++) {
+    const user = process.env[`EMAIL_${i}`];
+    const password = process.env[`APP_PASSWORD_${i}`];
 
-  if (!user || !password) {
-    return NextResponse.json(
-      { error: 'Server email configuration is missing. Please check EMAIL_1 and APP_PASSWORD_1 in .env.local' },
-      { status: 500 }
-    );
-  }
+    if (!user || !password) {
+      console.log(`Skipping account ${i} due to missing credentials.`);
+      continue; // Skip to the next account if credentials aren't set
+    }
 
-  const imapConfig: imaps.ImapSimpleOptions = {
-    imap: {
-      user: user,
-      password: password,
-      host: 'imap.gmail.com',
-      port: 993,
-      tls: true,
-      authTimeout: 10000,
-      tlsOptions: {
-        rejectUnauthorized: false, // WARNING: For development/self-signed certs only. In production, use a valid CA-signed certificate and set this to true.
+    console.log(`Attempting to connect with account ${i}: ${user}`);
+
+    const imapConfig: imaps.ImapSimpleOptions = {
+      imap: {
+        user: user,
+        password: password,
+        host: 'imap.gmail.com',
+        port: 993,
+        tls: true,
+        authTimeout: 10000,
+        tlsOptions: {
+          rejectUnauthorized: false,
+        },
       },
-    },
-  };
-  
-  let connection: imaps.ImapSimple | null = null;
+    };
 
-  try {
-    connection = await imaps.connect(imapConfig);
-    console.log(`Successfully connected to IMAP server for user: ${user}.`);
-
-    await connection.openBox('INBOX');
-    console.log('Opened INBOX.');
-
-    const fiveMinutesAgo = new Date();
-    fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
-    const formattedDateForSearch = formatDateForIMAP(fiveMinutesAgo);
-
-    const searchCriteria = [
-      ['TEXT', search],
-      ['SINCE', formattedDateForSearch]
-    ];
-
-    console.log(`Searching for "${search}" emails in the last 5 minutes for user ${user}. Criteria:`, searchCriteria);
-
-    const messagesMetadata = await connection.search(searchCriteria, {
-      bodies: ['HEADER.FIELDS (DATE)'],
-      struct: true
-    });
-
-    if (!messagesMetadata || messagesMetadata.length === 0) {
-      return NextResponse.json({ email: null, message: `No recent emails with the term "${search}" were found. You can try sending a new code and refreshing again.` });
-    }
-
-    console.log(`Found ${messagesMetadata.length} "${search}" messages in the last 15 mins (metadata) for user ${user}.`);
-
-    // Sort to find the most recent one
-    messagesMetadata.sort((a, b) => {
-      const dateA = new Date(a.attributes.date || 0).getTime();
-      const dateB = new Date(b.attributes.date || 0).getTime();
-      return dateB - dateA; // Newest first
-    });
-
-    const latestMessageMeta = messagesMetadata[0];
-    const latestMessageUid = latestMessageMeta.attributes.uid;
-    console.log(`Latest "${search}" email in last 15 mins is UID: ${latestMessageUid}`);
-
-    // Define a specific type for fetch options to avoid `any`
-    interface FetchOptions {
-      bodies: string[];
-      struct: boolean;
-      markSeen: boolean;
-    }
-
-    const fullFetchOptions: FetchOptions = { bodies: [''], struct: true, markSeen: false };
-    let emailHtml: string | null = null;
-    let finalMessage = 'Email content should appear here.'; // Default message if parsing fails
+    let connection: imaps.ImapSimple | null = null;
 
     try {
-      console.log(`Fetching full content for UID: ${latestMessageUid}`);
-      // Revert to connection.search() as .fetch() is not on ImapSimple type
-      const messages = await connection.search([['UID', latestMessageUid.toString()]], fullFetchOptions);
-      
-      if (!messages || messages.length === 0) {
-        console.error(`Could not fetch message details for UID: ${latestMessageUid}`);
-        finalMessage = `Error: Could not retrieve details for email UID ${latestMessageUid}.`;
-      } else {
-        const message = messages[0];
-        interface MessagePart {
-          which: string;
-          body?: string;
+      connection = await imaps.connect(imapConfig);
+      console.log(`Successfully connected to IMAP server for user: ${user}.`);
+
+      await connection.openBox('INBOX');
+      console.log('Opened INBOX.');
+
+      const fiveMinutesAgo = new Date();
+      fiveMinutesAgo.setMinutes(fiveMinutesAgo.getMinutes() - 5);
+      const formattedDateForSearch = formatDateForIMAP(fiveMinutesAgo);
+
+      const searchCriteria = [
+        ['TEXT', search],
+        ['SINCE', formattedDateForSearch]
+      ];
+
+      const messagesMetadata = await connection.search(searchCriteria, {
+        bodies: ['HEADER.FIELDS (DATE)'],
+        struct: true
+      });
+
+      if (messagesMetadata && messagesMetadata.length > 0) {
+        console.log(`Found ${messagesMetadata.length} matching messages for user ${user}.`);
+
+        messagesMetadata.sort((a, b) => {
+          const dateA = new Date(a.attributes.date || 0).getTime();
+          const dateB = new Date(b.attributes.date || 0).getTime();
+          return dateB - dateA;
+        });
+
+        const latestMessageMeta = messagesMetadata[0];
+        const latestMessageUid = latestMessageMeta.attributes.uid;
+
+        interface FetchOptions {
+          bodies: string[];
+          struct: boolean;
+          markSeen: boolean;
         }
-        const fullMessagePart = message.parts.find((part: MessagePart) => part.which === '');
-        
-        if (!fullMessagePart || !fullMessagePart.body) {
-          console.error('No full message part found or body is empty for UID:', latestMessageUid);
-          finalMessage = `Error: Could not retrieve content for email UID ${latestMessageUid}.`;
-        } else {
-          const rawEmail = fullMessagePart.body;
-          const parsedEmail: ParsedMail = await simpleParser(rawEmail);
-          const parsedHtml = parsedEmail.html || '';
 
-          if (!parsedHtml && parsedEmail.text) {
-            emailHtml = `<pre style="white-space: pre-wrap; word-wrap: break-word;">${parsedEmail.textAsHtml || parsedEmail.text.replace(/\\n/g, '<br>')}</pre>`;
-          } else if (parsedHtml) {
-            emailHtml = parsedHtml;
+        const fullFetchOptions: FetchOptions = { bodies: [''], struct: true, markSeen: false };
+        const messages = await connection.search([['UID', latestMessageUid.toString()]], fullFetchOptions);
+
+        if (messages && messages.length > 0) {
+          const message = messages[0];
+          interface MessagePart {
+            which: string;
+            body?: string;
           }
+          const fullMessagePart = message.parts.find((part: MessagePart) => part.which === '');
 
-          if (emailHtml) {
+          if (fullMessagePart && fullMessagePart.body) {
+            const rawEmail = fullMessagePart.body;
+            const parsedEmail: ParsedMail = await simpleParser(rawEmail);
+            const emailHtml = parsedEmail.html || `<pre>${parsedEmail.textAsHtml || parsedEmail.text}</pre>`;
+
             return NextResponse.json({
               email: {
                 from: parsedEmail.from?.text,
@@ -142,43 +114,29 @@ export async function POST(request: NextRequest) {
                 date: parsedEmail.date,
                 html: emailHtml,
               },
-              message: null 
+              message: null
             });
-          } else {
-            console.log('Email content (HTML or text) is empty after parsing for UID:', latestMessageUid);
-            finalMessage = `Email UID ${latestMessageUid} found, but content appears to be empty.`;
           }
         }
       }
-    } catch (fetchOrParseError: unknown) {
-      const fpError = fetchOrParseError as Error;
-      console.error(`Error fetching/parsing email UID ${latestMessageUid}:`, fpError);
-      finalMessage = `Error processing email UID ${latestMessageUid}: ${fpError.message}`;
-    }
-    
-    return NextResponse.json({ email: null, message: emailHtml ? null : finalMessage });
-
-  } catch (e: unknown) {
-    const error = e as Error;
-    console.error('IMAP connection or processing error:', error);
-    let errorMessage = 'Failed to fetch emails.';
-    if (error.message) {
-        errorMessage = error.message;
-    }
-    if (typeof e === 'object' && e !== null && 'source' in e && e.source === 'authentication') {
-        errorMessage = 'Authentication failed. Please double-check that the App Password for this account is correct and has not been revoked.';
-    }
-    return NextResponse.json({ error: errorMessage, email: null }, { status: 500 });
-  } finally {
-    if (connection && connection.imap && connection.imap.state !== 'disconnected') {
-      try {
-        await connection.end();
-        console.log('IMAP connection closed.');
-      } catch (endError) {
-        console.error('Error closing IMAP connection:', endError);
+    } catch (e: unknown) {
+      const error = e as Error;
+      console.error(`Error with account ${user}:`, error.message);
+      // Don't return, just log and continue to the next account
+    } finally {
+      if (connection && connection.imap && connection.imap.state !== 'disconnected') {
+        try {
+          await connection.end();
+          console.log(`IMAP connection for ${user} closed.`);
+        } catch (endError) {
+          console.error('Error closing IMAP connection:', endError);
+        }
       }
     }
   }
+
+  // If the loop completes without finding an email
+  return NextResponse.json({ email: null, message: `No recent emails with the term "${search}" were found across all accounts. You can try sending a new code and refreshing again.` });
 }
 
 // Note: The crucial part for App Password authentication is missing here with googleapis.
