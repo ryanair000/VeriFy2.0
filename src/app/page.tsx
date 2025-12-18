@@ -85,7 +85,8 @@ export default function HomePage() {
     const toastId = toast.loading('Fetching your email...');
 
     try {
-      const response = await fetch('/api/get-email', {
+      // First, try to find emails with "code"
+      let response = await fetch('/api/get-email', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -100,13 +101,36 @@ export default function HomePage() {
         throw new Error(errorText || 'An unknown error occurred.');
       }
 
-      const data = await response.json();
+      let data = await response.json();
+      
+      // If no "code" email found, try searching for "Amazon"
+      if (!data.email) {
+        toast.loading('No code email found. Searching for Amazon emails...', { id: toastId });
+        
+        response = await fetch('/api/get-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ 
+            search: 'Amazon' 
+          }), 
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || 'An unknown error occurred.');
+        }
+
+        data = await response.json();
+      }
+
       setRetrievedEmail(data.email);
 
       if (data.email) {
         toast.success('Email found!', { id: toastId });
       } else {
-        toast.error('No recent code email was found.', { id: toastId });
+        toast.error('No recent code or Amazon email was found.', { id: toastId });
       }
     } catch (err: unknown) {
       const error = err as Error;
